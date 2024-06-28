@@ -78,7 +78,9 @@ main(int argc, char** argv)
       runWaypointMission(vehicle, wayptPolygonSides, responseTimeout);
       break;
     case 'b':
-      hotptInitRadius = 10;
+      std::cout 
+        << "Input Radius                                           |" << '\n';
+      std::cin >> hotptInitRadius;
       runHotpointMission(vehicle, hotptInitRadius, responseTimeout);
       break;
     default:

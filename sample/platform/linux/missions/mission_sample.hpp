@@ -36,6 +36,8 @@
 // System Includes
 #include <cmath>
 #include <vector>
+#include <ctime>
+#include <time.h>
 
 // DJI OSDK includes
 #include <dji_vehicle.hpp>

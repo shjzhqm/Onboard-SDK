@@ -289,15 +289,15 @@ uploadWaypoints(Vehicle*                                  vehicle,
 bool
 runHotpointMission(Vehicle* vehicle, int initialRadius, int responseTimeout)
 {
-  if (!vehicle->isM100() && !vehicle->isLegacyM600())
-  {
-    if (!setUpSubscription(vehicle, responseTimeout))
-    {
-      std::cout << "Failed to set up Subscription!" << std::endl;
-      return false;
-    }
-    sleep(1);
-  }
+  // if (!vehicle->isM100() && !vehicle->isLegacyM600())
+  // {
+  //   if (!setUpSubscription(vehicle, responseTimeout))
+  //   {
+  //     std::cout << "Failed to set up Subscription!" << std::endl;
+  //     return false;
+  //   }
+  //   sleep(1);
+  // }
 
   // Global position retrieved via subscription
   Telemetry::TypeMap<TOPIC_GPS_FUSED>::type subscribeGPosition;
@@ -309,11 +309,31 @@ runHotpointMission(Vehicle* vehicle, int initialRadius, int responseTimeout)
                                 NULL);
   vehicle->missionManager->printInfo();
 
+  std::cout << "Input hotpoint longitue, latitude and altitude" << '\n';
+  float64_t longtitude, latitude, altitude;
+  std::cin >> longtitude >> latitude >> altitude;
+
+  std::cout << "Input start longitude and latitude" << '\n';
+  float64_t startLongitude, startLatitude;
+  std::cin >> startLongitude >> startLatitude;
+
+  std::cout << "Input yawrate" << '\n';
+  float32_t yawrate;
+  std::cin >> yawrate;
+  int spendTime = (360 + yawrate - 1) / yawrate;
+
+  const float64_t pi = std::acos(-1.0);
+
+  longtitude *= pi / 180;
+  latitude *= pi / 180;
+
   if (!vehicle->isM100() && !vehicle->isLegacyM600())
   {
     subscribeGPosition = vehicle->subscribe->getValue<TOPIC_GPS_FUSED>();
+    // startLongitude = subscribeGPosition.longitude;
+    // startLatitude = subscribeGPosition.latitude;
     vehicle->missionManager->hpMission->setHotPoint(
-      subscribeGPosition.longitude, subscribeGPosition.latitude, initialRadius);
+      longtitude, latitude, altitude);
   }
   else
   {
@@ -321,6 +341,42 @@ runHotpointMission(Vehicle* vehicle, int initialRadius, int responseTimeout)
     vehicle->missionManager->hpMission->setHotPoint(
       broadcastGPosition.longitude, broadcastGPosition.latitude, initialRadius);
   }
+
+  std::cout << "Update hotpoint rotation rate: new rate = 1 deg/s" << std::endl;
+  HotpointMission::YawRate yawRateStruct;
+  yawRateStruct.clockwise = 1;
+  yawRateStruct.yawRate   = yawrate;
+  vehicle->missionManager->hpMission->updateYawRate(yawRateStruct);
+
+
+  std::cout << "Update radius to new radius = " << initialRadius
+            << std::endl;
+  vehicle->missionManager->hpMission->setRadius(initialRadius);
+
+  vehicle->missionManager->hpMission->setCameraView(HotpointMission::VIEW_WEST);
+
+  //Input time
+  std::cout << "Input Flying time like %Y-%M-%D %H:%M:S" << std::endl;
+  tm tm_;
+  tm* info;
+  int y, mo, d, h, m, s;
+  std::cin >> y >> mo >> d >> h >> m >> s;
+  tm_.tm_year = y - 1900;
+  tm_.tm_mon = mo - 1;
+  tm_.tm_mday = d;
+  tm_.tm_hour = h;
+  tm_.tm_min = m;
+  tm_.tm_sec = s;
+  tm_.tm_isdst = 0;
+  time_t t_ = mktime(&tm_);
+
+  std::cout << "Input is " << y << '-' << mo << '-' << d << ' ' << h << ':' << m << ':' << s << std::endl;
+
+	char buffer[80];
+	info = localtime(&t_);//将time_t转为tm
+	
+	strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", info);
+	printf("格式化的日期 & 时间 : |%s|\n", buffer);
 
   // Takeoff
   ACK::ErrorCode takeoffAck = vehicle->control->takeoff(responseTimeout);
@@ -344,9 +400,10 @@ runHotpointMission(Vehicle* vehicle, int initialRadius, int responseTimeout)
   {
     sleep(15);
   }
+  
+
 
   // Start
-  std::cout << "Start with default rotation rate: 15 deg/s" << std::endl;
   ACK::ErrorCode startAck =
     vehicle->missionManager->hpMission->start(responseTimeout);
   if (ACK::getError(startAck))
@@ -358,17 +415,27 @@ runHotpointMission(Vehicle* vehicle, int initialRadius, int responseTimeout)
     }
     return false;
   }
-  sleep(20);
 
   // Pause
-  std::cout << "Pause for 5s" << std::endl;
+  std::cout << "Pause for predetermined time" << std::endl;
   ACK::ErrorCode pauseAck =
     vehicle->missionManager->hpMission->pause(responseTimeout);
   if (ACK::getError(pauseAck))
   {
     ACK::getErrorCodeMessage(pauseAck, __func__);
   }
-  sleep(5);
+
+  while(true){
+    time_t now = time(0);
+    info = localtime(&now);//将time_t转为tm
+    
+    strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", info);
+    printf("格式化的日期 & 时间 : |%s|\n", buffer);
+    if(now > t_){
+      break;
+    }
+    usleep(500000);
+  }
 
   // Resume
   std::cout << "Resume" << std::endl;
@@ -378,26 +445,85 @@ runHotpointMission(Vehicle* vehicle, int initialRadius, int responseTimeout)
   {
     ACK::getErrorCodeMessage(resumeAck, __func__);
   }
-  sleep(10);
 
-  // Update radius, no ACK
-  std::cout << "Update radius to 1.5x: new radius = " << 1.5 * initialRadius
-            << std::endl;
-  vehicle->missionManager->hpMission->updateRadius(1.5 * initialRadius);
-  sleep(10);
-
-  // Update velocity (yawRate), no ACK
-  std::cout << "Update hotpoint rotation rate: new rate = 5 deg/s" << std::endl;
-  HotpointMission::YawRate yawRateStruct;
-  yawRateStruct.clockwise = 1;
-  yawRateStruct.yawRate   = 5;
-  vehicle->missionManager->hpMission->updateYawRate(yawRateStruct);
-  sleep(10);
+  while(true){
+    time_t now = time(0);
+    info = localtime(&now);//将time_t转为tm
+    
+    strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", info);
+    printf("格式化的日期 & 时间 : |%s|\n", buffer);
+    if(now > t_ + 20){
+      break;
+    }
+    usleep(500000);
+  }
 
   // Stop
   std::cout << "Stop" << std::endl;
   ACK::ErrorCode stopAck =
     vehicle->missionManager->hpMission->stop(responseTimeout);
+
+  WayPointInitSettings fdata;
+  setWaypointInitDefaults(&fdata);
+
+  fdata.indexNumber = 2; // We add 1 to get the aircarft back to the start.
+
+  ACK::ErrorCode initAck = vehicle->missionManager->init(
+    DJI_MISSION_TYPE::WAYPOINT, responseTimeout, &fdata);
+  if (ACK::getError(initAck))
+  {
+    ACK::getErrorCodeMessage(initAck, __func__);
+  }
+
+  vehicle->missionManager->printInfo();
+  std::cout << "Initializing Waypoint Mission..\n";
+
+  // Waypoint Mission: Create Waypoints
+  WayPointSettings start_wp;
+  setWaypointDefaults(&start_wp);
+  std::vector<DJI::OSDK::WayPointSettings> wp_list;
+  start_wp.index = 0;
+  subscribeGPosition = vehicle->subscribe->getValue<TOPIC_GPS_FUSED>();
+  std::cout << "latitude is " << subscribeGPosition.latitude << ", longitude is " << subscribeGPosition.longitude << std::endl;
+  start_wp.latitude  = startLatitude;
+  start_wp.longitude = startLongitude;
+  start_wp.altitude  = altitude;
+  wp_list.push_back(start_wp);
+  start_wp.index = 1;
+  start_wp.latitude  = startLatitude;
+  start_wp.longitude = startLongitude;
+  start_wp.altitude  = 50;
+  wp_list.push_back(start_wp);
+  std::cout << "Creating Waypoints..\n";
+
+  // Waypoint Mission: Upload the waypoints
+  uploadWaypoints(vehicle, wp_list, responseTimeout);
+  std::cout << "Uploading Waypoints..\n";
+
+  // Waypoint Mission: Start
+  startAck =
+    vehicle->missionManager->wpMission->start(responseTimeout);
+  if (ACK::getError(startAck))
+  {
+    ACK::getErrorCodeMessage(startAck, __func__);
+    return false;
+  }
+  else
+  {
+    std::cout << "Starting Waypoint Mission.\n";
+  }
+
+  while(true){
+    time_t now = time(0);
+    info = localtime(&now);//将time_t转为tm
+    
+    strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", info);
+    printf("格式化的日期 & 时间 : |%s|\n", buffer);
+    if(now > t_ + 20 + 60){
+      break;
+    }
+    usleep(500000);
+  }
 
   std::cout << "land" << std::endl;
   ACK::ErrorCode landAck = vehicle->control->land(responseTimeout);

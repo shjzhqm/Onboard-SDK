@@ -1,4 +1,4 @@
-app_id : your_app_id_here
-app_key : your_key_here
-device : /dev/ttyUSB0
-baudrate : 230400
+app_id : 1147536
+app_key : 083ab2bc7d7b10e0e237363f811d8e72fd5c51b08190df9731e0b349f7ec841d
+device : /dev/ttyTHS2
+baudrate : 115200
